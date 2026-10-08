@@ -26,6 +26,8 @@ Pulls 2027-28 applications from a Cognito Forms OData feed, cleans them up, and 
    - If a file already exists, it's deleted and rewritten, so every run refreshes all files.
    - The CSVs leave out `date_submitted` and `id`.
 
+6. **Logs the run.** When run as a script, it adds a row to the Supabase `serverlogs` table named `apps2728 Marketing Export`, with `sucess` set to true or false. It needs `DATABASE_URL` in `.env`. A logging failure never stops the export, and runs in the notebook aren't logged.
+
 ## Running it
 
 ```bash

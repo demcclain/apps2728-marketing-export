@@ -1,14 +1,45 @@
 # %%
+import atexit
 import os
+import sys
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import polars as pl
+import psycopg
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv()  # loaded first so DATABASE_URL is available for logging even if the export fails early
+
+LOG_NAME = "apps2728 Marketing Export"
+
+
+def log_run(success):
+    """Record this run in the Supabase `serverlogs` table. Never fails the export."""
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        print("DATABASE_URL not set - run not logged.")
+        return
+    try:
+        # prepare_threshold=None keeps this working through Supabase's pooled connections
+        with psycopg.connect(url, connect_timeout=10, prepare_threshold=None) as conn:
+            conn.execute(
+                'INSERT INTO serverlogs (name, sucess, "time") VALUES (%s, %s, now())',
+                (LOG_NAME, success),
+            )
+        print(f"Logged to serverlogs: {LOG_NAME}, success={success}")
+    except Exception as e:
+        print(f"Could not write to serverlogs: {e}")
+
+
+# Only log real script runs (e.g. the daily job), not cells run in a notebook.
+# atexit fires after the script ends, including when it crashes; success stays False
+# unless the last cell is reached.
+export_succeeded = False
+if "ipykernel" not in sys.modules:
+    atexit.register(lambda: log_run(export_succeeded))
 
 ODATA_URL = os.environ["ODATA"]
 CHUNK_SIZE = 500
@@ -166,3 +197,5 @@ if all_path.exists():
     all_path.unlink()
 export.drop("submitted_day").write_csv(all_path)
 print(f"wrote {all_path.name}: {export.height} rows")
+
+export_succeeded = True
